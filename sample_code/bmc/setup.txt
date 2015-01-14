@@ -1,0 +1,42 @@
+mw 0x1e789080 00000500  #Enable LPC FWH cycles, Enable LPC to AHB bridge
+
+mw 0x1e789088 30000E00  #Base LPC bus address [31:16] -> 0E00
+                        #Base AHB bus address [31:16] -> 3000
+
+mw 0x1e78908C fe0001ff  #Mask Bit [31:16] of LPC to AHB bridge -> fe00
+                        #Decoding Range [31:16] of LPC to AHB bridge -> 01FF
+
+mw 0x1e6e2070 120ce406  #Disable GPIO-D & GPIO-E Pass Through
+
+mw 0x1e6e2080 fbfC0000  #Setup GPIO-A (5:4)
+
+mw 0x1e6e2088 01c000ff  #Disable MAC#1 MDC1 and MDIO1
+
+mw 0x1e6e208c c1c000ff  #Disable pass through.  Leave pull downs enabled.
+
+mw 0x1e6e2090 303fa028  #Disable SD2 function pins, setup GPIO-A (5:4)
+
+
+mw 0x1E780024 40000402  #Set GPIOH6, GPIOE1, GPIOF2 as output
+mw 0x1E780020 5fc8f3ff  #Set GPIOH6 as High
+mw 0x1E780004 01700070  #Set FSI_EN, CLK, DATA as output, Set GPIOA6 as output for FSI Cronus/BMC control, Setup BCM5718 Function Pins
+mw 0x1E780000 9b0ebc8f  #Set FSI_EN as High
+
+######## Setup UART 1
+mw 0x1e6e2084 00fff0c0  #Enable UART1
+mw 0x1e783000 0000000d	#Set Baud rate divisor -> 13 (Baud 115200)
+mw 0x1e783004 00000000	#Set Baud rate divisor -> 13 (Baud 115200)
+mw 0x1e783008 000000c3  #Disable Parity, 1 stop bit, 8 bits
+mw 0x1E78909C 00000000  #Set routing UART1 -> COM 1
+
+####### Setup Ethernet
+#mw 0x1e6e2004 71849808  #Reset MAC
+#mw 0x1e6e2048 00002200  #Remove RGMII delays
+#mw 0x1e6e2004 71849008  #Release MAC reset
+mw 0x1e6e2040 5ac080c1  #Set NCSI mode
+#mw 0x1E780000 137f8cb7  #Disable both PCI-e ports for host traffic
+#mw 0x1e660050 800B9d4f  #Set MAC to 100Mbps
+#sleep 1			#wait 1 second
+#mw 0x1e660050 800B9d4f	#will reset MAC to correct frequency(100Mbps)
+mw 0x1e660008 0000A042  #Set MAC
+mw 0x1e66000C 3F20CA0F  #Set MAC
