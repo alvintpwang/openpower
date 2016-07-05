@@ -12,16 +12,29 @@
 #include "occ.h"
 #include "ecmd_i2c.h"
 
-#define SCOM_OCC_SRAM_WOX  0x0006B013
-#define SCOM_OCC_SRAM_WAND 0x0006B012
-#define SCOM_OCC_SRAM_ADDR 0x0006B010
-#define SCOM_OCC_SRAM_DATA 0x0006B015
+
+
+
+
+// To generate attn to OCC
+#define ATTN_DATA                0x0006B035
+
+// For BMC to read/write SRAM
+#define OCB_ADDRESS              0x0006B070
+#define OCB_DATA                 0x0006B075
+#define OCB_STATUS_CONTROL_AND   0x0006B072
+#define OCB_STATUS_CONTROL_OR    0x0006B073
+
+// OCC SRAM address
 #define OCC_COMMAND_ADDR 0xFFFF6000
 #define OCC_RESPONSE_ADDR 0xFFFF7000
 
 #define MODE_GETSCOM 1
 #define MODE_PUTSCOM 2
 #define MODE_OCC 3
+
+
+#define DUMP_RAW 1
 
 int main(int argc, char *argv[])
 {
@@ -34,7 +47,7 @@ int main(int argc, char *argv[])
   }
   
   //setup i2c interface that P8 connects to
-  int file=setup_i2c("/dev/i2c3",0x50);  
+  int file=setup_i2c("/dev/i2c-3",0x50);
 
 
   uint32_t scom_address;
@@ -76,17 +89,30 @@ int main(int argc, char *argv[])
   }
   //grab all the occ data and parse
   if (mode==MODE_OCC) {
-    printf("Getting OCC data...\n");
+    printf("Getting OCC poll response data...\n");
 
-    //Procedure to access SRAM where OCC data is located
-    putscom(file,SCOM_OCC_SRAM_WOX,0x08000000,0x00000000);
-    putscom(file,SCOM_OCC_SRAM_WAND,0xFBFFFFFF,0xFFFFFFFF);
-    putscom(file,SCOM_OCC_SRAM_ADDR,OCC_RESPONSE_ADDR,0x00000000);
-    putscom(file,SCOM_OCC_SRAM_ADDR,OCC_RESPONSE_ADDR,0x00000000);
+    // Init OCB
+    putscom(file, OCB_STATUS_CONTROL_OR,  0x08000000, 0x00000000);
+    putscom(file, OCB_STATUS_CONTROL_AND, 0xFBFFFFFF, 0xFFFFFFFF);
+
+    // Send poll command to OCC
+    putscom(file, OCB_ADDRESS, OCC_COMMAND_ADDR, 0x00000000);
+    putscom(file, OCB_ADDRESS, OCC_COMMAND_ADDR, 0x00000000);
+    putscom(file, OCB_DATA, 0x00000001, 0x10001100);
+
+    // Trigger ATTN
+    putscom(file, ATTN_DATA, 0x01010000, 0x00000000);
+
+    // TODO: check command status Refere to "1.6.2 OCC Command/Response Sequence" in OCC_OpenPwr_FW_Interfaces1.2.pdf
+    // Use sleep as workaround
+    sleep(2);
+
+    // Get response data
+    putscom(file, OCB_ADDRESS, OCC_RESPONSE_ADDR, 0x00000000);
     char occ_data[4096];
     
-    getscomb(file,SCOM_OCC_SRAM_DATA,occ_data,0);
-           
+    getscomb(file,OCB_DATA,occ_data,0);
+
     uint16_t num_bytes=get_length(occ_data);
     int b;
     printf("Length found: %d\n",num_bytes);
@@ -94,10 +120,28 @@ int main(int argc, char *argv[])
       fprintf(stderr,"ERROR:   Length must be < 4KB\n");
       exit(1);
     }
-    for (b=8; b<num_bytes; b=b+8) {
-      getscomb(file,SCOM_OCC_SRAM_DATA,occ_data,b);
+
+#ifdef DUMP_RAW
+    printf("\nRAW data\n==================\n");
+    for (int i=0;i<8;i++) {
+      if(i==4) printf("  ");
+      printf("%02x", occ_data[i]);
     }
-    
+    printf("\n");
+#endif
+
+    for (b=8; b<num_bytes; b=b+8) {
+      getscomb(file, OCB_DATA, occ_data,b);
+#ifdef DUMP_RAW
+      for (int i=0;i<8;i++) {
+        if(i==4) printf("  ");
+        printf("%02x", occ_data[b+i]);
+      }
+      printf("\n");
+#endif
+    }
+
+    printf("\n");
     occ_response occ_resp;
     read_occ_response(occ_data,&occ_resp);
     printf("OCC Code Level: %s\n",occ_resp.data.occ_code_level);
@@ -106,10 +150,10 @@ int main(int argc, char *argv[])
       printf("Sensor block: %d\n",b);
       printf("\t%s Sensors\n",occ_resp.data.blocks[b].sensor_type);
       for (s=0;s<occ_resp.data.blocks[b].num_of_sensors;s++) {
-	if (strcmp(occ_resp.data.blocks[b].sensor_type,"TEMP")==0 ||
-	    strcmp(occ_resp.data.blocks[b].sensor_type,"FREQ")==0) {
-	  printf("\t\t%d\n",occ_resp.data.blocks[b].sensor[s].value);
-	}
+        if (strcmp(occ_resp.data.blocks[b].sensor_type,"TEMP")==0 ||
+          strcmp(occ_resp.data.blocks[b].sensor_type,"FREQ")==0) {
+          printf("\t\t%d\n",occ_resp.data.blocks[b].sensor[s].value);
+        }
       }
     }
     

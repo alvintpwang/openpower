@@ -6,6 +6,7 @@
 #include <linux/i2c-dev.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 #include <fcntl.h>
 #include <stdint.h>
 #include "ecmd_i2c.h"
@@ -44,13 +45,13 @@ int getscom(int file, uint32_t address,uint32_t *value0,uint32_t *value1)
   address = address << 1;
   const char* address_buf = (const char*)&address;
   
-  uint32_t res=write(file, address_buf, 4);
-  if (res != 4) {
+  int32_t res=write(file, address_buf, 4);
+  if (res < 0) {
     return I2C_WRITE_ERROR;
   }
   char buf[8];
   res=read(file, buf, 8);
-  if (res != 8) {
+  if (res < 0 ) {
     return I2C_READ_ERROR;
   }
   memcpy(value1,&buf[0],4);
@@ -64,13 +65,13 @@ int getscomb(int file, uint32_t address,char* data,int start)
   address = address << 1;
   const char* address_buf = (const char*)&address;
   
-  uint32_t res=write(file, address_buf, 4);
-  if (res != 4) {
+  int32_t res=write(file, address_buf, 4);
+  if (res < 0) {
     return I2C_WRITE_ERROR;
   }
   char buf[8];
   res=read(file, buf, 8);
-  if (res != 8) {
+  if (res < 0 ) {
     return I2C_READ_ERROR;
   }
   int b;
@@ -93,8 +94,8 @@ int putscom(int file, uint32_t address, uint32_t data0, uint32_t data1) {
     memcpy(&buf[4],d1,4);
     memcpy(&buf[8],d0,4);
        
-    uint32_t res=write(file, buf,12);
-    if (res != 12) {
+    int32_t res=write(file, buf,12);
+    if (res < 0 ) {
       return I2C_WRITE_ERROR;
     } 
     return 0;
